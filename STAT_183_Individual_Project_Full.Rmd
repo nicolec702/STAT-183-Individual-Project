@@ -1,0 +1,653 @@
+---
+title: "STAT 183 Project"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+date: "2024-05-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading data
+
+```{r}
+cvd <- read.csv("~/Desktop/UC_Riverside/2023-2024/Spring/STAT_183/Individual Project/CVD_cleaned.csv")
+```
+
+## Loading Libraries
+
+```{r}
+library(ggplot2)
+library(dplyr)
+# install.packages(gridExtra)
+library(gridExtra) # Plots
+library(tidyr)
+library(MASS) # Stepwise Regression
+library(car) # Multicollinearity (vif)
+library(arm) # Binned Plotted Residuals
+library(pROC) # Correlation Matrix
+library(reshape2) # Correlation
+```
+
+# Glimpse of the data:
+
+```{r}
+glimpse(cvd)
+```
+
+# Summary Statistics
+
+```{r}
+summary(cvd)
+```
+
+## Variable classifications
+
+```{r}
+str(cvd)
+```
+
+
+
+
+# Data Cleaning:
+
+* Remove any NA or duplicate observations
+
+```{r}
+# Checking for NA or Duplicates
+sum(is.na(cvd))
+sum(duplicated(cvd))
+```
+
+* There are 80 duplicates, need to remove these observations
+
+```{r}
+cvd <- unique(cvd)
+sum(duplicated(cvd))
+```
+
+```{r}
+summary(cvd)
+```
+
+```{r}
+glimpse(cvd)
+```
+
+* Changing Categorical variables to binary 0/1 integers
+* Making factor levels for the predictor variables
+
+```{r}
+# Changing Character variables to Factors
+# General Health
+cvd$General_Health <- as.factor(cvd$General_Health)
+
+# Checkup
+cvd$Checkup <- as.factor(cvd$Checkup)
+
+# Exercise
+# n_distinct(cvd$Exercise) # 2
+cvd$Exercise <- as.factor(cvd$Exercise)
+
+# Heart Disease
+n_distinct(cvd$Heart_Disease) # 2
+cvd$HD_Int <- ifelse(cvd$Heart_Disease == "Yes", 1, 0)
+
+# # Skin Cancer
+# n_distinct(cvd$Skin_Cancer) # 2
+cvd$Skin_Cancer <- as.factor(cvd$Skin_Cancer)
+#
+# # Other Cancer
+# n_distinct(cvd$Other_Cancer) # 2
+cvd$Other_Cancer <- as.factor(cvd$Other_Cancer)
+#
+# # Depression
+# n_distinct(cvd$Depression) # 2
+cvd$Depression <- as.factor(cvd$Depression)
+#
+# # Diabetes
+# n_distinct(cvd$Diabetes) # 4
+cvd$Diabetes <- as.factor(cvd$Diabetes)
+#
+# # Arthritis
+# n_distinct(cvd$Arthritis)
+cvd$Arthritis <- as.factor(cvd$Arthritis)
+#
+# # Sex
+# n_distinct(cvd$Sex)
+cvd$Sex <- as.factor(cvd$Sex)
+
+# Age Category
+cvd$Age_Category <- as.factor(cvd$Age_Category)
+
+# Smoking History
+cvd$Smoking_History <- as.factor(cvd$Smoking_History)
+
+# head(cvd, 5)
+str(cvd)
+```
+
+
+# Exploratory Data Analysis (EDA)
+
+```{r}
+# Gender Pie Chart for distribution
+gender <- table(cvd$Sex)
+gender_labels <- paste0(rownames(gender), " = ", round(100 * gender/sum(gender), 2), "%")
+
+pie(gender, col = 2:3, labels = gender_labels, main = "Total Gender Distribution")
+```
+
+
+Gender vs. Target
+
+```{r}
+ggplot(data = cvd, aes(x = Heart_Disease), fill = Sex) +
+  geom_bar(color="red", fill="orange", alpha=0.2)
+```
+
+Based on this plot, we can see that a majority of the dataset contains people who do not have any history of heart disease.
+
+* Distribution of Numerical Variables
+
+```{r}
+pl1 <- ggplot(data = cvd, aes(x=Height_.cm., y=Heart_Disease)) +
+  geom_boxplot(color="#69b3a2", fill="gray", alpha=0.2)
+
+pl2 <- ggplot(data = cvd, aes(Weight_.kg., Heart_Disease)) +
+  geom_boxplot(color="#69b3a2", fill="gray", alpha=0.2)
+
+pl3 <- ggplot(data = cvd, aes(BMI, Heart_Disease)) +
+  geom_boxplot(color="#69b3a2", fill="gray", alpha=0.2)
+
+pl4 <- ggplot(data = cvd, aes(Alcohol_Consumption, Heart_Disease)) +
+  geom_boxplot(color="#69b3a2", fill="gray", alpha=0.2)
+
+pl5 <- ggplot(data = cvd, aes(Fruit_Consumption, Heart_Disease)) +
+  geom_boxplot(color="#69b3a2", fill="gray", alpha=0.2)
+
+pl6 <- ggplot(data = cvd, aes(Green_Vegetables_Consumption, Heart_Disease)) +
+  geom_boxplot(color="#69b3a2", fill="gray", alpha=0.2)
+
+pl7 <- ggplot(data = cvd, aes(FriedPotato_Consumption, Heart_Disease)) +
+  geom_boxplot(color="#69b3a2", fill="gray", alpha=0.2)
+
+grid.arrange(pl1,pl2,pl3,pl4,pl5,pl6,pl7)
+```
+
+
+* Distributions of Numerical Variables (Density Histograms)
+
+```{r}
+pl1 <- ggplot(data = cvd, aes(x = Height_.cm., y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("Height Density") +
+  xlab("Height (cm)") + ylab("Density") +
+  theme_void()
+
+pl2 <- ggplot(data = cvd, aes(x = Weight_.kg., y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("Weight Density") +
+  xlab("Weight (kg)") + ylab("Density") +
+  theme_void()
+
+pl3 <- ggplot(data = cvd, aes(x = BMI, y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("BMI Density") +
+  xlab("BMI") + ylab("Density") +
+  theme_void()
+
+pl4 <- ggplot(data = cvd, aes(x = Alcohol_Consumption, y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("Alcohol Consumption Density") +
+  xlab("Number of Days Alcohol was Consumed within Last 30 Days") + ylab("Density") +
+  theme_void()
+
+pl5 <- ggplot(data = cvd, aes(x = Fruit_Consumption, y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("Fruit Consumption Density") +
+  xlab("Fruit Consumption in last 30 days") + ylab("Density") +
+  theme_void()
+
+pl6 <- ggplot(data = cvd, aes(x = Green_Vegetables_Consumption, y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("Green Vegetable Consumption Density") +
+  xlab("Green Vegetable Consumption in last 30 days") + ylab("Density") +
+  theme_void()
+
+pl7 <- ggplot(data = cvd, aes(x = FriedPotato_Consumption, y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("Fried Potato Consumption Density") +
+  xlab("Fried Potato Consumption in last 30 days") + ylab("Density") +
+  theme_void()
+
+grid.arrange(pl1,pl2,pl3,pl4,pl5,pl6,pl7)
+```
+
+
+* Distributions of Categorical Variables
+
+```{r}
+pl1 <- ggplot(data = cvd, aes(x = General_Health)) +
+  geom_bar()
+
+pl2 <- ggplot(data = cvd, aes(x = Checkup)) +
+  geom_bar()
+
+pl3 <- ggplot(data = cvd, aes(x = Exercise)) +
+  geom_bar()
+
+pl4 <- ggplot(data = cvd, aes(x = Heart_Disease)) +
+  geom_bar()
+
+pl5 <- ggplot(data = cvd, aes(x = Skin_Cancer)) +
+  geom_bar()
+
+pl6 <- ggplot(data = cvd, aes(x = Other_Cancer)) +
+  geom_bar()
+
+pl7 <- ggplot(data = cvd, aes(x = Depression)) +
+  geom_bar()
+
+pl8 <- ggplot(data = cvd, aes(x = Arthritis)) +
+  geom_bar()
+
+pl9 <- ggplot(data = cvd, aes(x = Age_Category)) +
+  geom_bar()
+
+pl10 <- ggplot(data = cvd, aes(x = Smoking_History)) +
+  geom_bar()
+
+grid.arrange(pl1,pl2,pl3,pl4,pl5,pl6,pl7,pl8,pl9,pl10, ncol = 4)
+```
+
+
+```{r}
+table(cvd$Heart_Disease)
+```
+
+Significantly more people without Heart Disease than with. Comparing 24,000s to 280,000s.
+
+
+## Beginning Logistic Regression Modeling
+
+```{r}
+# Factor variables need to have at least 2 levels
+
+model1 <- glm(formula = HD_Int ~ . - Heart_Disease, data = cvd, family = "binomial")
+summary(model1)
+```
+
+* Contains all 18 predictor variables.
+
+
+## Wald test on predictors that have at least one level where p-value > alpha
+
+```{r, warning = F}
+# Wald Test on Checkup
+model <- glm(HD_Int ~ Checkup, data = cvd, family = binomial)
+Anova(model, type = "II", test = "Wald")
+cat("----------------------------------------------------------------------------------", "\n")
+
+# Wald Test on Diabetes
+model <- glm(HD_Int ~ Diabetes, data = cvd, family = binomial)
+Anova(model, type = "II", test = "Wald")
+```
+
+* Overall P-Values for both Checkup and Diabetes are small, so we can conclude they are significant to the model.
+
+Wald test on Exercise
+
+```{r}
+# Wald Test on Diabetes
+model <- glm(HD_Int ~ Exercise, data = cvd, family = binomial)
+Anova(model, type = "II", test = "Wald")
+```
+
+
+
+
+## ANOVA
+
+```{r}
+anova <- aov(model1)
+summary(anova)
+```
+
+
+Binned Residuals Plot
+
+```{r}
+binnedplot(fitted(model1), 
+           residuals(model1, type = "response"), 
+           nclass = NULL, 
+           xlab = "Expected Values",
+           ylab = "Average residual",
+           main = "Binned residual plot",
+           cex.pts = 0.8,
+           col.pts = 1,
+           col.int = "gray")
+```
+
+
+## Accuracy of Full Model
+
+```{r}
+prediction <- ifelse(model1$fitted.values > 0.5, "pos", "neg")
+
+confusion_matrix <- table(cvd$HD_Int, prediction)
+rownames(confusion_matrix) <- c("No Heart Disease", "Heart Disease")
+colnames(confusion_matrix) <- c("Predicted No Heart Disease", "Predicted Heart Disease")
+confusion_matrix
+
+accuracy <- sum(diag(confusion_matrix))/sum(confusion_matrix)
+accuracy
+
+# Area under curve, 1 indicates perfect predictive model
+auc(cvd$HD_Int~model1$fitted.values, data = cvd)
+```
+
+## Multicollinearity Analysis
+
+```{r}
+vif(model1)
+```
+
+* By squaring the GVIF^(1/(2*Df)) values, we can conclude that there is a high multicollinearity problem regarding Height, Weight, and BMI.
+* Reduced_model1 is removing Heart_Disease, Height, Weight, and BMI
+
+```{r}
+# Reduced model after VIF
+
+reduced_model1 <- glm(formula = HD_Int ~ . - Heart_Disease - Height_.cm. - Weight_.kg. - BMI, data = cvd, family = "binomial")
+summary(reduced_model1)
+```
+
+* Increased AIC from 137038 to 137061, so the full model is better than without 3 variables.
+
+* Confirm low VIF values
+
+```{r}
+vif(reduced_model1)
+```
+
+* No sign of multicollinearity.
+* Results in 15 variables.
+
+Binned Residuals Plot
+
+```{r}
+binnedplot(fitted(reduced_model1), 
+           residuals(reduced_model1, type = "response"), 
+           nclass = NULL, 
+           xlab = "Expected Values",
+           ylab = "Average residual",
+           main = "Binned residual plot",
+           cex.pts = 0.8,
+           col.pts = 1,
+           col.int = "gray")
+```
+
+* Visually, lots of outliers exist.
+* Outliers can be caused by some unknown outside factors.
+
+## ANOVA
+
+```{r}
+anova <- aov(reduced_model1)
+summary(anova)
+```
+
+## Accuracy of Reduced Model 1
+
+```{r}
+prediction <- ifelse(reduced_model1$fitted.values > 0.5, "pos", "neg")
+# 
+confusion_matrix <- table(cvd$HD_Int, prediction)
+rownames(confusion_matrix) <- c("No Heart Disease", "Heart Disease")
+colnames(confusion_matrix) <- c("Predicted No Heart Disease", "Predicted Heart Disease")
+confusion_matrix
+
+accuracy <- sum(diag(confusion_matrix))/sum(confusion_matrix)
+accuracy
+
+# Area under curve, 1 indicates perfect predictive model
+auc(cvd$HD_Int~reduced_model1$fitted.values, data = cvd)
+```
+
+
+
+
+## Stepwise Regression Model
+
+* Performs stepwise regression on the full model
+
+```{r warning=F}
+model2 <- stepAIC(model1, direction = "both", trace = F) # On full model
+summary(model2)
+```
+
+* Lowered AIC from full model 137033 to 137027.
+* This model only contains 14 variables: General_Health, Checkup, Skin_Cancer, Other_Cancer, Depression, Diabetes, Arthritis, Sex, Age_Category, Height_.cm., Weight_.kg., Smoking_History, Alcohol_Consumption, Green_Vegetables_Consumption
+
+
+ANOVA of Stepwise Model
+
+
+```{r}
+anova <- aov(model2)
+summary(anova)
+```
+
+Binned Residuals Plot
+
+```{r}
+binnedplot(fitted(model2), 
+           residuals(model2, type = "response"), 
+           nclass = NULL, 
+           xlab = "Expected Values",
+           ylab = "Average residual",
+           main = "Binned residual plot",
+           cex.pts = 0.8,
+           col.pts = 1,
+           col.int = "gray")
+```
+
+* Visually, lots of outliers exist.
+* Outliers can be caused by some unknown outside factors.
+
+
+## Accuracy of Stepwise Model
+
+```{r}
+prediction <- ifelse(model2$fitted.values > 0.5, "pos", "neg")
+
+confusion_matrix <- table(cvd$HD_Int, prediction)
+rownames(confusion_matrix) <- c("No Heart Disease", "Heart Disease")
+colnames(confusion_matrix) <- c("Predicted No Heart Disease", "Predicted Heart Disease")
+confusion_matrix
+
+accuracy <- sum(diag(confusion_matrix))/sum(confusion_matrix)
+accuracy
+
+# Area under curve, 1 indicates perfect predictive model
+auc(cvd$HD_Int~model2$fitted.values, data = cvd)
+```
+
+```{r}
+vif(model2)
+```
+
+* No sign of multicollinearity.
+
+
+## Log Transform Data
+
+* Caution, with the log transformation, now it's possible to obtain -Infinity values because we have zero values in our numerical data
+* Going to shift the data so that values can stay positive
+
+```{r}
+new_cvd <- cvd
+new_cvd$Alcohol_Consumption <- new_cvd$Alcohol_Consumption + 1
+new_cvd$Fruit_Consumption <- new_cvd$Fruit_Consumption + 1
+new_cvd$Green_Vegetables_Consumption <- new_cvd$Green_Vegetables_Consumption + 1
+new_cvd$FriedPotato_Consumption <- new_cvd$FriedPotato_Consumption + 1
+new_cvd$HD_Int <- new_cvd$HD_Int + 1
+
+new_cvd <- new_cvd %>%
+  mutate_at(vars(Height_.cm., Weight_.kg.,BMI,Alcohol_Consumption,Fruit_Consumption,Green_Vegetables_Consumption,,FriedPotato_Consumption, HD_Int), ~log(.))
+
+glimpse(new_cvd)
+```
+
+Boxplot Distributions after log transformation
+
+```{r}
+pl1 <- ggplot(data = new_cvd, aes(Height_.cm., Heart_Disease)) +
+  geom_boxplot()
+
+pl2 <- ggplot(data = new_cvd, aes(Weight_.kg., Heart_Disease)) +
+  geom_boxplot()
+
+pl3 <- ggplot(data = new_cvd, aes(BMI, Heart_Disease)) +
+  geom_boxplot()
+
+pl4 <- ggplot(data = new_cvd, aes(Alcohol_Consumption, Heart_Disease)) +
+  geom_boxplot()
+
+pl5 <- ggplot(data = new_cvd, aes(Fruit_Consumption, Heart_Disease)) +
+  geom_boxplot()
+
+pl6 <- ggplot(data = new_cvd, aes(Green_Vegetables_Consumption, Heart_Disease)) +
+  geom_boxplot()
+
+pl7 <- ggplot(data = new_cvd, aes(FriedPotato_Consumption, Heart_Disease)) +
+  geom_boxplot()
+
+grid.arrange(pl1,pl2,pl3,pl4,pl5,pl6,pl7)
+```
+
+* Density Distributions of Numerical Variables (After Log-Transformation)
+
+```{r}
+pl1 <- ggplot(data = new_cvd, aes(x = Height_.cm., y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("Height Density") +
+  xlab("Height (cm)") + ylab("Density") +
+  theme_void()
+
+pl2 <- ggplot(data = new_cvd, aes(x = Weight_.kg., y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("Weight Density") +
+  xlab("Weight (kg)") + ylab("Density") +
+  theme_void()
+
+pl3 <- ggplot(data = new_cvd, aes(x = BMI, y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("BMI Density") +
+  xlab("BMI") + ylab("Density") +
+  theme_void()
+
+pl4 <- ggplot(data = new_cvd, aes(x = Alcohol_Consumption, y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("Alcohol Consumption Density") +
+  xlab("Number of Days Alcohol was Consumed within Last 30 Days") + ylab("Density") +
+  theme_void()
+
+pl5 <- ggplot(data = new_cvd, aes(x = Fruit_Consumption, y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("Fruit Consumption Density") +
+  xlab("Fruit Consumption in last 30 days") + ylab("Density") +
+  theme_void()
+
+pl6 <- ggplot(data = new_cvd, aes(x = Green_Vegetables_Consumption, y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("Green Vegetable Consumption Density") +
+  xlab("Green Vegetable Consumption in last 30 days") + ylab("Density") +
+  theme_void()
+
+pl7 <- ggplot(data = new_cvd, aes(x = FriedPotato_Consumption, y = after_stat(density))) +
+  geom_histogram(fill = "white", colour = "black") +
+  geom_density(color = 4, fill = 4, alpha = 0.25) +
+  ggtitle("Fried Potato Consumption Density") +
+  xlab("Fried Potato Consumption in last 30 days") + ylab("Density") +
+  theme_void()
+
+grid.arrange(pl1,pl2,pl3,pl4,pl5,pl6,pl7)
+```
+
+New model with log transformations:
+
+```{r}
+# Heart Disease to int
+
+newmodel1 <- glm(formula = HD_Int ~ . - Heart_Disease, data = new_cvd, family = "binomial")
+summary(newmodel1)
+```
+
+```{r}
+# str(new_cvd)
+```
+
+```{r}
+anova <- aov(newmodel1)
+summary(anova)
+```
+
+```{r}
+vif(newmodel1)
+```
+
+* By squaring the GVIF^(1/(2*Df)) values, we can conclude that there is a high multicollinearity problem regarding Height, Weight, and BMI.
+
+Binned Residuals of Log Transformed
+
+```{r}
+binnedplot(fitted(newmodel1), 
+           residuals(newmodel1, type = "response"), 
+           nclass = NULL, 
+           xlab = "Expected Values",
+           ylab = "Average residual",
+           main = "Binned residual plot",
+           cex.pts = 0.8,
+           col.pts = 1,
+           col.int = "gray")
+```
+
+* Still not performing great in terms of outliers.
+* Outliers can be caused by some unknown outside factors.
+
+
+## Accuracy of Log-Transformed Model
+
+```{r}
+prediction <- ifelse(newmodel1$fitted.values > 0.5, "pos", "neg")
+
+confusion_matrix <- table(cvd$HD_Int, prediction)
+rownames(confusion_matrix) <- c("No Heart Disease", "Heart Disease")
+colnames(confusion_matrix) <- c("Predicted No Heart Disease", "Predicted Heart Disease")
+confusion_matrix
+
+accuracy <- sum(diag(confusion_matrix))/sum(confusion_matrix)
+accuracy
+
+# Area under curve, 1 indicates perfect predictive model
+auc(cvd$HD_Int~newmodel1$fitted.values, data = cvd)
+```
